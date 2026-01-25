@@ -9,6 +9,7 @@ import os
 import numpy as np
 from datetime import datetime
 import wandb  # <--- IMPO RT WANDB
+from torchvision import transforms 
 
 
 
@@ -31,6 +32,12 @@ class RobotDataset(Dataset):
         self.frames = []
         self.actions = []
         self.chunk_size = CONFIG["chunk_size"]
+
+        self.transform = transforms.Compose([
+            transforms.ToTensor(), # Converts to 0-1 and (C, H, W)
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                                 std=[0.229, 0.224, 0.225])
+        ])
         
         # 1. Find all CSV files recursively
         files = glob.glob(f"{root_dir}/*/data.csv")
@@ -86,8 +93,10 @@ class RobotDataset(Dataset):
             img = np.zeros((240, 240, 3), dtype=np.uint8)
         else:
             img = cv2.resize(img, (240, 240))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  #since using blue red adn yellow patern
             
-        img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1) / 255.0 
+        # img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1) / 255.0 
+        img = self.transform(img)
         action = torch.tensor(self.actions[idx], dtype=torch.float32)
         return img, action
 
@@ -95,13 +104,16 @@ class SentryPolicy(nn.Module):
     def __init__(self):
         super().__init__()
         from torchvision.models import resnet18, ResNet18_Weights
+        #self.backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+        #Pre-trained PyTorch models expect images normalized with ImageNet statistics
         self.backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.backbone.fc = nn.Identity() 
         
         self.head = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(256, CONFIG["chunk_size"] * 2) 
+            nn.Linear(256, CONFIG["chunk_size"] * 2), 
+            nn.Tanh() # <--- Forces output to be valid motor speeds (-1 to 1) 
         )
 
     def forward(self, x):

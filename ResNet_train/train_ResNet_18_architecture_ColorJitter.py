@@ -39,7 +39,9 @@ class RobotDataset(Dataset):
         # We define it once in init to save time
         self.transform = transforms.Compose([
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-            transforms.RandomGrayscale(p=0.1)
+            transforms.RandomGrayscale(p=0.1),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                                 std=[0.229, 0.224, 0.225])
         ])
         
         files = glob.glob(f"{root_dir}/*/data.csv")
@@ -48,6 +50,7 @@ class RobotDataset(Dataset):
             
         for csv_file in files:
             df = pd.read_csv(csv_file)
+            df.columns = df.columns.str.strip()
             folder = os.path.dirname(csv_file)
             
             for i in range(len(df) - CONFIG["chunk_size"]):
@@ -69,6 +72,7 @@ class RobotDataset(Dataset):
             img = np.zeros((240, 240, 3), dtype=np.uint8)
         else:
             img = cv2.resize(img, (240, 240))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
         # 2. Convert to Tensor & Normalize (0 to 1)
         # Shape becomes (3, 224, 224)
@@ -89,6 +93,7 @@ class SentryPolicy(nn.Module):
         super().__init__()
         from torchvision.models import resnet18, ResNet18_Weights
         self.backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+        # self.backbone = resnet18(weights=ResNet18_Weights.Normalize)
         self.backbone.fc = nn.Identity() 
         
         self.head = nn.Sequential(

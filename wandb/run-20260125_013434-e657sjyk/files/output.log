@@ -1,0 +1,19 @@
+Training on cuda
+Found 1 episodes. Loading data...
+Dataset Loaded: 213 samples ready for training.
+Traceback (most recent call last):
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_ResNet_18_architecture.py", line 136, in <module>
+    model = SentryPolicy().to(device)
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_ResNet_18_architecture.py", line 100, in __init__
+    self.backbone = resnet18(weights=ResNet18_Weights.Normalize)
+  File "/home/odin/miniconda3/envs/lerobot/lib/python3.10/enum.py", line 437, in __getattr__
+    raise AttributeError(name) from None
+AttributeError: Normalize
+Traceback (most recent call last):
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_ResNet_18_architecture.py", line 136, in <module>
+    model = SentryPolicy().to(device)
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_ResNet_18_architecture.py", line 100, in __init__
+    self.backbone = resnet18(weights=ResNet18_Weights.Normalize)
+  File "/home/odin/miniconda3/envs/lerobot/lib/python3.10/enum.py", line 437, in __getattr__
+    raise AttributeError(name) from None
+AttributeError: Normalize
