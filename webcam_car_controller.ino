@@ -3,8 +3,6 @@
 #include "esp_http_server.h"
 #include "esp_timer.h"
 #include "img_converters.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -63,11 +61,6 @@ static uint8_t *last_jpg_buf = NULL;
 static size_t last_jpg_size = 0;
 static size_t last_jpg_cap = 0;
 static bool last_jpg_valid = false;
-
-// Drive command shared between HTTP (core 1) and control task (core 0)
-static volatile float target_left = 0.0f;
-static volatile float target_right = 0.0f;
-portMUX_TYPE driveMux = portMUX_INITIALIZER_UNLOCKED;
 
 // =================
 // Utility functions
@@ -238,10 +231,7 @@ static esp_err_t drive_handler(httpd_req_t *req) {
     l = constrain(l, -1.0f, 1.0f);
     r = constrain(r, -1.0f, 1.0f);
   }
-  portENTER_CRITICAL(&driveMux);
-  target_left = l;
-  target_right = r;
-  portEXIT_CRITICAL(&driveMux);
+  setWheelSpeeds(l, r);
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_type(req, "text/plain");
   return httpd_resp_sendstr(req, "OK");
@@ -487,33 +477,8 @@ void setup() {
   startCameraServer();
   Serial.println("HTTP server started");
   Serial.println("Open http://<IP> for controls, stream on http://<IP>:81/stream");
-
-  // Launch drive control task on core 0 (APP). Streaming/HTTP stay on core 1.
-  xTaskCreatePinnedToCore(
-      controlTask,
-      "drive_control",
-      4096,   // stack words
-      NULL,
-      3,      // priority
-      NULL,
-      0);     // core 0
-}
-
-// Control task pinned to core 0 (APP core) to keep drive timing independent of camera/HTTP (core 1)
-void controlTask(void *pvParameters) {
-  const TickType_t period = pdMS_TO_TICKS(20);  // 50 Hz servo update
-  TickType_t last = xTaskGetTickCount();
-  for (;;) {
-    float l, r;
-    portENTER_CRITICAL(&driveMux);
-    l = target_left;
-    r = target_right;
-    portEXIT_CRITICAL(&driveMux);
-    setWheelSpeeds(l, r);
-    vTaskDelayUntil(&last, period);
-  }
 }
 
 void loop() {
-  vTaskDelay(pdMS_TO_TICKS(1000));  // nothing to do here; everything in tasks
+  delay(100);
 }

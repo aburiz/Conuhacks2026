@@ -8,12 +8,17 @@ import os
 import csv
 from datetime import datetime
 from enum import Enum
+from typing import Optional, Tuple
 
 # --- CONFIGURATION ---
 ESP32_IP = "192.168.0.129"  # Update if your IP changes
 STREAM_URL = f"http://{ESP32_IP}:81/stream"
 BASE_URL = f"http://{ESP32_IP}"
 SAVE_DIR = "dataset"
+
+# Feature toggles / placeholders
+ENABLE_HAND_TRACKING = False  # hook MediaPipe here later
+ENABLE_SOUND = False          # hook sound feedback here later
 
 # --- STATES ---
 class AppMode(Enum):
@@ -32,6 +37,58 @@ frame_count = 0
 
 # Networking session for faster repeated requests
 control_session = requests.Session()
+control_session.headers.update({"Connection": "keep-alive"})
+
+# Timing for control responsiveness
+CMD_KEEPALIVE = 0.10   # seconds between resends of same command when held
+
+# Shared video frame
+latest_frame = None
+frame_lock = threading.Lock()
+capture_running = threading.Event()
+
+# Optional async key polling (Windows)
+try:
+    import ctypes
+
+    _GetKeyState = ctypes.windll.user32.GetAsyncKeyState
+    _HAS_ASYNC = True
+except Exception:
+    _GetKeyState = None
+    _HAS_ASYNC = False
+# Placeholders ---------------------------------------------------------------
+class HandTracker:
+    """Placeholder for MediaPipe hand tracking."""
+    def __init__(self, enabled: bool):
+        self.enabled = enabled
+
+    def infer(self, frame) -> Optional[Tuple[float, float]]:
+        """Return (left,right) in [-1,1] or None if no hand intent."""
+        if not self.enabled:
+            return None
+        # TODO: implement MediaPipe Hands -> drive mapping
+        return None
+
+
+class SentryBrain:
+    """Placeholder for autonomous sentry/maze logic."""
+    def decide(self, frame) -> Tuple[float, float]:
+        if frame is None:
+            return (0.0, 0.0)
+        # TODO: replace with RL/heuristic policy
+        return (0.0, 0.0)
+
+
+class SoundNotifier:
+    """Placeholder for sound events."""
+    def __init__(self, enabled: bool):
+        self.enabled = enabled
+
+    def ping(self, event: str):
+        if not self.enabled:
+            return
+        # TODO: play tone based on event
+        pass
 
 def send_command(left, right):
     """Sends command to ESP32 non-blocking."""
@@ -115,117 +172,184 @@ def draw_hud(frame):
 
     cv2.putText(frame, f"L: {current_action[0]}", (10, h - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
     cv2.putText(frame, f"R: {current_action[1]}", (120, h - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+def decode_drive_key(key: int) -> Optional[Tuple[float, float]]:
+    """Map keycode from cv2.waitKeyEx to differential drive command."""
+    key_low = key & 0xFF
+    # Arrow keys (Linux/mac typical)
+    if key_low == 82:   # Up
+        return (1.0, 1.0)
+    if key_low == 84:   # Down
+        return (-1.0, -1.0)
+    if key_low == 81:   # Left
+        return (-0.5, 0.5)
+    if key_low == 83:   # Right
+        return (0.5, -0.5)
+    # Arrow keys (Windows virtual-key in waitKeyEx)
+    if key in (0x260000, 2490368):  # Up
+        return (1.0, 1.0)
+    if key in (0x280000, 2621440):  # Down
+        return (-1.0, -1.0)
+    if key in (0x250000, 2424832):  # Left
+        return (-0.5, 0.5)
+    if key in (0x270000, 2555904):  # Right
+        return (0.5, -0.5)
+    # WASD fallback
+    if key_low == ord('w'):
+        return (1.0, 1.0)
+    if key_low == ord('s'):
+        return (-1.0, -1.0)
+    if key_low == ord('a'):
+        return (-0.5, 0.5)
+    if key_low == ord('d'):
+        return (0.5, -0.5)
+    return None
+
+
+def poll_drive_state() -> Optional[Tuple[float, float]]:
+    """Instantaneous key state (Windows)."""
+    if not _HAS_ASYNC:
+        return None
+    pressed = lambda vk: (_GetKeyState(vk) & 0x8000) != 0
+    # Prioritize arrows
+    if pressed(0x26):  # Up
+        return (1.0, 1.0)
+    if pressed(0x28):  # Down
+        return (-1.0, -1.0)
+    if pressed(0x25):  # Left
+        return (-0.5, 0.5)
+    if pressed(0x27):  # Right
+        return (0.5, -0.5)
+    if pressed(ord('W')):
+        return (1.0, 1.0)
+    if pressed(ord('S')):
+        return (-1.0, -1.0)
+    if pressed(ord('A')):
+        return (-0.5, 0.5)
+    if pressed(ord('D')):
+        return (0.5, -0.5)
+    return None
 def main():
     global current_action, current_mode, recording
 
-    # Track the last command sent to avoid flooding the ESP32
-    last_sent_action = [None, None] 
+    last_sent_action = [None, None]
+    last_sent_action_time = 0.0
+    notifier = SoundNotifier(ENABLE_SOUND)
+    hand_tracker = HandTracker(ENABLE_HAND_TRACKING)
+    sentry = SentryBrain()
 
     os.makedirs(SAVE_DIR, exist_ok=True)
 
     print(f"Connecting to stream at: {STREAM_URL}")
-    try:
-        stream = urllib.request.urlopen(STREAM_URL, timeout=5)
-    except Exception as e:
-        print(f"Error connecting to camera: {e}")
+    cap = cv2.VideoCapture(STREAM_URL)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    if not cap.isOpened():
+        print("Error connecting to camera")
         return
+    capture_running.set()
 
-    bytes_data = b''
-    
+    def capture_loop():
+        global latest_frame
+        while capture_running.is_set():
+            ok, frame = cap.read()
+            if ok and frame is not None:
+                with frame_lock:
+                    latest_frame = frame
+            else:
+                time.sleep(0.005)
+
+    threading.Thread(target=capture_loop, daemon=True).start()
+
     print("\n--- CONTROLS ---")
-    print("TAB   : Switch Modes")
-    print("SPACE : Toggle Recording")
-    print("WASD  : Drive")
-    print("Q     : Quit")
-    
+    print("TAB / 1/2/3 : Switch modes (Teleop / Tracking / Sentry)")
+    print("SPACE       : Toggle recording")
+    print("Arrows/WASD : Drive (Teleop)")
+    print("Q           : Quit")
+
+    blank = np.zeros((240, 320, 3), dtype=np.uint8)
     while True:
-        # --- 1. READ VIDEO STREAM ---
-        try:
-            bytes_data += stream.read(4096)
-            a = bytes_data.find(b'\xff\xd8')
-            if a != -1:
-                b = bytes_data.find(b'\xff\xd9', a)
-                if b != -1:
-                    jpg = bytes_data[a:b+2]
-                    bytes_data = bytes_data[b+2:]
-                    
-                    if len(jpg) > 0:
-                        frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
-                        if frame is not None:
-                            
-                            # --- 2. LOGIC ---
-                            if current_mode == AppMode.TELEOP:
-                                # Save frames ONLY if recording
-                                if recording:
-                                    save_img = cv2.resize(frame, (224, 224))
-                                    save_frame(save_img, current_action)
+        with frame_lock:
+            frame = latest_frame.copy() if latest_frame is not None else blank
 
-                                # --- THE FIX: SEND COMMANDS ALWAYS (Check if changed) ---
-                                # Only send request if action changed (reduces Wifi lag)
-                                if current_action != last_sent_action:
-                                    threading.Thread(target=send_command, args=(current_action[0], current_action[1])).start()
-                                    last_sent_action = list(current_action) # Update last sent
+        if current_mode == AppMode.TELEOP:
+            if recording:
+                save_img = cv2.resize(frame, (224, 224))
+                save_frame(save_img, current_action)
 
-                            elif current_mode == AppMode.TRACKING:
-                                # Stop robot if switching to tracking (safety)
-                                if current_action != [0.0, 0.0]:
-                                    current_action = [0.0, 0.0]
-                                    send_command(0, 0)
-                                    last_sent_action = [0.0, 0.0]
-                                cv2.putText(frame, "TRACKING NOT IMPLEMENTED", (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            gesture_action = hand_tracker.infer(frame)
+            if gesture_action is not None:
+                current_action = list(gesture_action)
 
-                            elif current_mode == AppMode.SENTRY:
-                                cv2.putText(frame, "SENTRY MODE ACTIVE", (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            if current_action != last_sent_action:
+                threading.Thread(target=send_command, args=(current_action[0], current_action[1])).start()
+                last_sent_action = list(current_action)
 
-                            # --- 3. UI ---
-                            draw_hud(frame)
-                            cv2.imshow('ESP32 RC Controller', frame)
-            
-            if len(bytes_data) > 65536: bytes_data = b'' 
-                
-        except Exception as e:
-            print(f"Stream Error: {e}")
-            break
+        elif current_mode == AppMode.TRACKING:
+            if current_action != [0.0, 0.0]:
+                current_action = [0.0, 0.0]
+                send_command(0, 0)
+                last_sent_action = [0.0, 0.0]
+            cv2.putText(frame, "TRACKING PLACEHOLDER (hand tracking soon)", (40, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-        # --- 4. INPUT HANDLING ---
-        key = cv2.waitKey(1)
-        
+        elif current_mode == AppMode.SENTRY:
+            auto_action = sentry.decide(frame)
+            current_action = list(auto_action)
+            if current_action != last_sent_action:
+                threading.Thread(target=send_command, args=(current_action[0], current_action[1])).start()
+                last_sent_action = list(current_action)
+            cv2.putText(frame, "SENTRY PLACEHOLDER", (60, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+
+        draw_hud(frame)
+        cv2.imshow('ESP32 RC Controller', frame)
+
+        drive_state = poll_drive_state()
+        key = cv2.waitKeyEx(1)
+
         if key == ord('q'):
             stop_recording()
             break
-        elif key == 9: # TAB
-            new_mode_val = (current_mode.value % 3) + 1
-            current_mode = AppMode(new_mode_val)
+        elif key in (9, ord('1'), ord('2'), ord('3')):  # TAB or numeric
+            if key == ord('1'):
+                current_mode = AppMode.TELEOP
+            elif key == ord('2'):
+                current_mode = AppMode.TRACKING
+            elif key == ord('3'):
+                current_mode = AppMode.SENTRY
+            else:
+                current_mode = AppMode((current_mode.value % 3) + 1)
             stop_recording()
             current_action = [0.0, 0.0]
             send_command(0, 0)
-            last_sent_action = [0.0, 0.0] # Reset state
+            last_sent_action = [0.0, 0.0]
+            last_sent_action_time = time.time()
+            notifier.ping("mode")
             print(f"Switched to {current_mode.name}")
 
         if current_mode == AppMode.TELEOP:
-            if key == 32: # SPACE
-                if recording: stop_recording()
-                else: start_recording()
-            
-            # Drive Logic
-            if key == ord('w'): current_action = [1.0, 1.0]
-            elif key == ord('s'): current_action = [-1.0, -1.0]
-            elif key == ord('a'): current_action = [-0.5, 0.5]
-            elif key == ord('d'): current_action = [0.5, -0.5]
-            elif key == -1: 
+            if key == 32:  # SPACE
+                if recording:
+                    stop_recording()
+                else:
+                    start_recording()
+            drive = drive_state or decode_drive_key(key)
+            if drive:
+                current_action = list(drive)
+            elif drive_state is None and key == -1:
                 current_action = [0.0, 0.0]
-        else:
-            current_action = [0.0, 0.0]
 
-    cv2.destroyAllWindows()
-    if csv_file: csv_file.close()
+        # --- command send with keepalive ---
+        now = time.time()
+        if current_action != last_sent_action or now - last_sent_action_time > CMD_KEEPALIVE:
+            threading.Thread(target=send_command, args=(current_action[0], current_action[1]), daemon=True).start()
+            last_sent_action = list(current_action)
+            last_sent_action_time = now
 
-if __name__ == '__main__':
-    main()
-
+    capture_running.clear()
+    cap.release()
     cv2.destroyAllWindows()
     if csv_file:
         csv_file.close()
+
 
 if __name__ == '__main__':
     main()
