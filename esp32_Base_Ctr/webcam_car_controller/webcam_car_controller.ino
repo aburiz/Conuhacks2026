@@ -31,8 +31,8 @@ const char *password = "iEEE2023?";
 const int LEFT_SERVO_PIN = 2;   // D1 on XIAO header
 const int RIGHT_SERVO_PIN = 4;  // D3 on XIAO header
 // Invert if a wheel spins the opposite direction you expect
-const int LEFT_DIR = -1;   // set to -1 to flip
-const int RIGHT_DIR = 1;  // set to -1 to flip (right wheel flipped for mount)
+const int LEFT_DIR = 1;   // set to -1 to flip
+const int RIGHT_DIR = -1;  // set to -1 to flip (right wheel flipped for mount)
 // Per-servo trim in microseconds to nail the true stop point of your units
 // Increase a trim value if that wheel creeps forward, decrease if it creeps backward.
 const int LEFT_TRIM_US = 0;
@@ -265,6 +265,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   size_t jpg_buf_len = 0;
   uint8_t *jpg_buf = NULL;
   char part_buf[128];
+  static int64_t last_frame_time = 0;
 
   res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
   if (res != ESP_OK) return res;
@@ -272,6 +273,11 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
 
   while (true) {
+    int64_t now = esp_timer_get_time();
+    if (last_frame_time && (now - last_frame_time) < 33000) {  // ~30 fps cap
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
     fb = esp_camera_fb_get();
     if (!fb) {
       // If capture fails, try replaying the last good frame
@@ -329,6 +335,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     }
     if (res == ESP_OK) res = httpd_resp_send_chunk(req, (const char *)jpg_buf, jpg_buf_len);
 
+    last_frame_time = esp_timer_get_time();
     if (fb) {
       esp_camera_fb_return(fb);
       fb = NULL;
@@ -413,7 +420,7 @@ void setup() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 16000000;
-  config.frame_size = FRAMESIZE_240X240;
+  config.frame_size = FRAMESIZE_240X240; // back to 240x240
   config.pixel_format = PIXFORMAT_JPEG;
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // smoother pacing; avoid tight polling
   config.fb_location = CAMERA_FB_IN_PSRAM;

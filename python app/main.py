@@ -27,6 +27,8 @@ UDP_PORT = 3333
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 DRIVE_SCALE = 0.2  # scale outgoing drive commands without reflashing ESP
+MAX_FPS = 30
+FRAME_PERIOD = 1.0 / MAX_FPS
 
 # Feature toggles / placeholders
 ENABLE_HAND_TRACKING = True   # MediaPipe hand tracking for gesture drive
@@ -409,9 +411,17 @@ def main():
     print("Q           : Quit")
 
     blank = np.zeros((240, 320, 3), dtype=np.uint8)
+    last_frame_time = time.time()
     while True:
         with frame_lock:
             frame = latest_frame.copy() if latest_frame is not None else blank
+
+        # cap FPS
+        now = time.time()
+        dt = now - last_frame_time
+        if dt < FRAME_PERIOD:
+            time.sleep(FRAME_PERIOD - dt)
+        last_frame_time = time.time()
 
         if current_mode == AppMode.TELEOP:
             if recording:
