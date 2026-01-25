@@ -100,7 +100,7 @@ class SentryPolicy(nn.Module):
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, CONFIG["chunk_size"] * 2),
-            nn.Tanh() # <--- Forces output to be valid motor speeds (-1 to 1) 
+            # nn.Tanh() # <--- Forces output to be valid motor speeds (-1 to 1) 
         )
 
     def forward(self, x):
