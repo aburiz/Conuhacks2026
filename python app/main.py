@@ -447,7 +447,13 @@ def main():
             cv2.putText(frame, "SENTRY PLACEHOLDER", (60, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
         draw_hud(frame)
-        cv2.imshow('ESP32 RC Controller', frame)
+        # Resize to fit a larger view (e.g., 1080p height with aspect kept)
+        target_h = 1080
+        h, w, _ = frame.shape
+        scale = target_h / float(h)
+        target_w = int(w * scale)
+        display = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        cv2.imshow('ESP32 RC Controller', display)
 
         drive_state = poll_drive_state()
         key = cv2.waitKeyEx(1)
