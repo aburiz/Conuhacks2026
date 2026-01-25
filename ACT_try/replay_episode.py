@@ -5,7 +5,7 @@ import time
 
 # --- CONFIGURATION ---
 # Paste your folder path here
-EPISODE_PATH = r"dataset\20260124_191052" 
+EPISODE_PATH = r"dataset\20260124_193141" 
 PLAYBACK_SPEED = 30  # FPS (Adjust if it's too fast/slow)
 
 def draw_hud(frame, v_left, v_right, frame_idx, total_frames):
