@@ -40,15 +40,19 @@ def create_landmarker():
     return vision.HandLandmarker.create_from_options(options)
 
 
-def draw_landmarks_bgr(frame, landmarks):
+def draw_fingertips_bgr(frame, landmarks):
+    """Draw only fingertip points (thumb + four fingers)."""
+
     h, w, _ = frame.shape
     pts = [(int(l.x * w), int(l.y * h)) for l in landmarks]
+    fingertip_ids = [4, 8, 12, 16, 20]
+    fingertip_names = {4: "Thumb", 8: "Index", 12: "Middle", 16: "Ring", 20: "Pinky"}
 
-    for start, end in HAND_CONNECTIONS:
-        cv2.line(frame, pts[start], pts[end], (0, 255, 0), 2)
-
-    for x, y in pts:
-        cv2.circle(frame, (x, y), 3, (255, 0, 255), -1)
+    for tip_id in fingertip_ids:
+        x, y = pts[tip_id]
+        cv2.circle(frame, (x, y), 10, (0, 255, 255), -1)
+        cv2.putText(frame, fingertip_names[tip_id], (x - 30, y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+        cv2.putText(frame, fingertip_names[tip_id], (x - 30, y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
 
 def count_fingers_up(landmarks, image_shape):
@@ -119,16 +123,7 @@ def main():
 
         if result.hand_landmarks:
             for hand in result.hand_landmarks:
-                draw_landmarks_bgr(bgr, hand)
-
-                h, w, _ = bgr.shape
-                gesture = classify_gesture(hand, bgr.shape)
-                cv2.putText(bgr, gesture, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
-
-                # Highlight index fingertip (landmark 8)
-                idx_x = int(hand[8].x * w)
-                idx_y = int(hand[8].y * h)
-                cv2.circle(bgr, (idx_x, idx_y), 8, (0, 0, 255), -1)
+                draw_fingertips_bgr(bgr, hand)
 
         cv2.imshow("Gesture Demo", bgr)
         if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -86,8 +86,8 @@ except Exception:
 class HandTracker:
     """
     MediaPipe Hands-based gesture controller.
-    - Open hand/palm: drive based on palm position.
-    - Fist (closed): stop.
+    - Follows fingertip centroid of first detected hand.
+    - If no fingertips detected, returns None (caller will stop).
     """
     def __init__(self, enabled: bool):
         self.enabled = enabled
@@ -111,9 +111,6 @@ class HandTracker:
             self.enabled = False
             self.landmarker = None
 
-        # thresholds relative to hand size
-        self.open_thresh = 0.18
-        self.fist_thresh = 0.12
         self.smooth = 0.3  # low-pass factor
         self.prev = (0.0, 0.0)
         self.t0 = time.perf_counter()
@@ -137,29 +134,17 @@ class HandTracker:
         self.missing_frames = 0
         hand = res.hand_landmarks[0]
 
-        # Wrist and fingertips
-        wrist = hand[0]
-        tips = [hand[i] for i in (8, 12, 16, 20)]
-        # bounding box diagonal for scale
-        xs = [lm.x for lm in hand]
-        ys = [lm.y for lm in hand]
-        diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys)) + 1e-6
-
-        mean_tip_dist = sum(math.hypot(t.x - wrist.x, t.y - wrist.y) for t in tips) / len(tips)
-        is_fist = mean_tip_dist < self.fist_thresh
-        is_open = mean_tip_dist > self.open_thresh
-
-        if is_fist:
-            self.prev = (0.0, 0.0)
-            return (0.0, 0.0)
-
-        if not is_open:
-            # ambiguous hand pose; ignore
+        # Fingertip centroid (use tips 8,12,16,20 if present)
+        tip_indices = [8, 12, 16, 20]
+        tips = [hand[i] for i in tip_indices if i < len(hand)]
+        if not tips:
             return None
+        cx = sum(t.x for t in tips) / len(tips)
+        cy = sum(t.y for t in tips) / len(tips)
 
-        # Map wrist position to drive
-        forward = (0.5 - wrist.y) * 2.0  # hand higher = forward
-        turn = (0.5 - wrist.x) * 2.0     # invert so hand moves the same way the robot turns
+        # Map fingertip centroid to drive
+        forward = (0.5 - cy) * 2.0  # tip higher = forward
+        turn = (0.5 - cx) * 2.0     # invert so hand moves the same wqay the robot turns
         forward = max(-1.0, min(1.0, forward))
         turn = max(-1.0, min(1.0, turn))
         left = forward - turn
