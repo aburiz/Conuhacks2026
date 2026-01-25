@@ -28,7 +28,7 @@ CONFIG = {
     "epochs": 20,
     "lr": 1e-4,
     "architecture": "ResNet18_Modified",
-    "output_dir": "output"
+    "output_dir": "output/jitter"
 }
 class RobotDataset(Dataset):
     def __init__(self, root_dir):

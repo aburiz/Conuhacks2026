@@ -24,7 +24,7 @@ CONFIG = {
     "epochs": 20,
     "lr": 1e-4,
     "architecture": "ResNet18_Modified",
-    "output_dir": "output"
+    "output_dir": "output/classic"
 }
 
 class RobotDataset(Dataset):
