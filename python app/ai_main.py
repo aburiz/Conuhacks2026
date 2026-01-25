@@ -32,7 +32,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this filename to your latest .pth
-SENTRY_MODEL_PATH = "output/sentry_policy_20260124_214033.pth" 
+SENTRY_MODEL_PATH = "output/sentry_policy_20260125_034803.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
