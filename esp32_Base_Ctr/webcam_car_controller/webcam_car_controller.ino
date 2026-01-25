@@ -31,8 +31,8 @@ const char *password = "iEEE2023?";
 const int LEFT_SERVO_PIN = 2;   // D1 on XIAO header
 const int RIGHT_SERVO_PIN = 4;  // D3 on XIAO header
 // Invert if a wheel spins the opposite direction you expect
-const int LEFT_DIR = 1;   // set to -1 to flip
-const int RIGHT_DIR = 1;  // set to -1 to flip
+const int LEFT_DIR = -1;   // set to -1 to flip
+const int RIGHT_DIR = 1;  // set to -1 to flip (right wheel flipped for mount)
 // Per-servo trim in microseconds to nail the true stop point of your units
 // Increase a trim value if that wheel creeps forward, decrease if it creeps backward.
 const int LEFT_TRIM_US = 0;
