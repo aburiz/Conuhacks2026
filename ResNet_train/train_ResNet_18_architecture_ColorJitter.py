@@ -127,8 +127,16 @@ if __name__ == "__main__":
         wandb.finish() # Clean exit
         exit()
         
-    loader = DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=True)
-    
+    # loader = DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=True)
+    # New (Optimized)
+    loader = DataLoader(
+        dataset, 
+        batch_size=128,          # Try 128 or 256. 32 is too small.
+        shuffle=True, 
+        num_workers=16,           # Critical: Uses 8 CPU cores to prep images ahead of time
+        pin_memory=True,         # Faster CPU -> GPU transfer
+        persistent_workers=True  # Keeps workers alive between epochs
+    )
     model = SentryPolicy().to(device)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG["lr"])
     criterion = nn.MSELoss() 

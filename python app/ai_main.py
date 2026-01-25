@@ -32,7 +32,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this filename to your latest .pth
-SENTRY_MODEL_PATH = "output/sentry_policy_20260125_034803.pth" 
+SENTRY_MODEL_PATH = "output/classic/sentry_policy_20260125_073104.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -102,7 +102,7 @@ class SentryPolicy(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        self.chunk_size = 10 
+        self.chunk_size = 20 
         # Note: weights=None is fine here since we load state_dict immediately
         self.backbone = resnet18(weights=None) 
         self.backbone.fc = nn.Identity() 
@@ -363,6 +363,29 @@ def poll_drive_state() -> Optional[Tuple[float, float]]:
     if pressed(ord('D')): return (0.5, -0.5)
     return None
 
+
+def clean_motor_command(val, is_left_motor=True):
+    # 1. Apply Trim
+    trim = MOTOR_CONFIG["left_trim"] if is_left_motor else MOTOR_CONFIG["right_trim"]
+    val = val * trim
+
+    # 2. Deadzone Logic (The "Kick")
+    # If AI wants to move (> 0.1), force it to be at least min_power (0.55)
+    if abs(val) > MOTOR_CONFIG["stop_threshold"]:
+        if val > 0:
+            val = max(val, MOTOR_CONFIG["min_power"])
+        else:
+            val = min(val, -MOTOR_CONFIG["min_power"])
+    else:
+        val = 0.0 # Just stop
+
+    # 3. Scale down for safety (Your existing DRIVE_SCALE)
+    # We apply the global scale AFTER the kick logic to keep it safe
+    val = val * DRIVE_SCALE 
+
+    # 4. Clamp to ensure we never exceed hardware limits
+    return max(min(val, 1.0), -1.0)
+
 def main():
     global current_action, current_mode, recording
 
@@ -503,8 +526,8 @@ def main():
             elif drive_state is None and key == -1:
                 current_action = [0.0, 0.0]
 
-        desired_action[0] = current_action[0] * DRIVE_SCALE
-        desired_action[1] = current_action[1] * DRIVE_SCALE
+        desired_action[0] = current_action[0] * DRIVE_SCALE * 1.6
+        desired_action[1] = current_action[1] * DRIVE_SCALE * 0.90
 
     capture_running.clear()
     sender_running.clear()

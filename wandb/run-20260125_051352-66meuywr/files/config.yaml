@@ -1,0 +1,65 @@
+_wandb:
+    value:
+        cli_version: 0.24.0
+        e:
+            0rub3x2w9a8j9ewlxj0otp4nscryr4pz:
+                codePath: ResNet_train/train_temporal.py
+                codePathLocal: ResNet_train/train_temporal.py
+                cpu_count: 16
+                cpu_count_logical: 32
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "979998785536"
+                        used: "418515382272"
+                email: eltopchi3@gmail.com
+                executable: /home/odin/miniconda3/envs/conU/bin/python
+                git:
+                    commit: b7152c0e8f68200c9d70644d935c7576114c6f09
+                    remote: https://github.com/aburiz/Conuhacks2026.git
+                gpu: NVIDIA GeForce RTX 5070
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Blackwell
+                      cudaCores: 6144
+                      memoryTotal: "12820938752"
+                      name: NVIDIA GeForce RTX 5070
+                      uuid: GPU-7501b1c9-9eb0-ee9a-fbf7-3b85c97ec088
+                host: ODIN-IEEE
+                memory:
+                    total: "98714808320"
+                os: Linux-6.8.0-79-generic-x86_64-with-glibc2.39
+                program: /home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_temporal.py
+                python: CPython 3.11.14
+                root: /home/odin/conUhack_2026/Conuhacks2026
+                startedAt: "2026-01-25T10:13:52.185115Z"
+                writerId: 0rub3x2w9a8j9ewlxj0otp4nscryr4pz
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+            "3":
+                - 1
+                - 2
+                - 16
+            "4": 3.11.14
+            "5": 0.24.0
+            "12": 0.24.0
+            "13": linux-x86_64
+architecture:
+    value: ResNet18_Temporal_Stack2
+batch_size:
+    value: 32
+chunk_size:
+    value: 20
+epochs:
+    value: 25
+lr:
+    value: 0.0001
+output_dir:
+    value: output/temporal

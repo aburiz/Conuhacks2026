@@ -33,7 +33,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this filename to your latest .pth
-SENTRY_MODEL_PATH = "output/sentry_policy_20260125_034803.pth" 
+SENTRY_MODEL_PATH = "output/classic/sentry_policy_20260125_055112.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -43,7 +43,7 @@ FRAME_PERIOD = 1.0 / MAX_FPS
 
 # NOTE: This must match your training! 
 # The file provided earlier used 10, but if you retrained for 30, change this to 30.
-CHUNK_SIZE = 10 
+CHUNK_SIZE = 20 
 
 # Feature toggles
 ENABLE_HAND_TRACKING = True   # MediaPipe hand tracking for gesture drive
@@ -311,8 +311,8 @@ def sender_loop():
             target_l = current_action[0]
             target_r = current_action[1]
 
-        final_l = target_l * DRIVE_SCALE
-        final_r = target_r * DRIVE_SCALE
+        final_l = target_l * DRIVE_SCALE * 1.6
+        final_r = target_r * DRIVE_SCALE * 0.9
         
         try:
             if USE_UDP and udp_sock:

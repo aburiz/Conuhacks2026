@@ -32,7 +32,7 @@ USE_UDP = True
 UDP_PORT = 3333
 
 # Update with your new 30-step model path
-SENTRY_MODEL_PATH = "output/sentry_policy_30step.pth" 
+SENTRY_MODEL_PATH = "output/temporal/sentry_policy_20260125_064812.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -307,8 +307,8 @@ def sender_loop():
             target_r = current_action[1]
 
         # Apply Scale
-        final_l = target_l * DRIVE_SCALE
-        final_r = target_r * DRIVE_SCALE
+        final_l = target_l * DRIVE_SCALE * 1.6
+        final_r = target_r * DRIVE_SCALE * 0.9
         
         send_command(final_l, final_r)
         

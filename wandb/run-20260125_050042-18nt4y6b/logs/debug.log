@@ -18,3 +18,8 @@ config: {'chunk_size': 20, 'batch_size': 32, 'epochs': 20, 'lr': 0.0001, 'archit
 2026-01-25 05:00:43,222 INFO    MainThread:403040 [wandb_run.py:_redirect():2469] Redirects installed.
 2026-01-25 05:00:43,224 INFO    MainThread:403040 [wandb_init.py:init():1084] run started, returning control to user process
 2026-01-25 05:00:44,707 INFO    MainThread:403040 [wandb_watch.py:_watch():68] Watching
+2026-01-25 05:13:29,223 INFO    MainThread:403040 [wandb_run.py:_finish():2295] finishing run emath-mrl/ConUhacks/18nt4y6b
+2026-01-25 05:13:29,223 INFO    MainThread:403040 [wandb_run.py:_atexit_cleanup():2494] got exitcode: 0
+2026-01-25 05:13:29,223 INFO    MainThread:403040 [wandb_run.py:_restore():2476] restore
+2026-01-25 05:13:29,223 INFO    MainThread:403040 [wandb_run.py:_restore():2482] restore done
+2026-01-25 05:13:31,667 INFO    MainThread:403040 [wandb_run.py:_footer_sync_info():3870] logging synced files
