@@ -13,7 +13,7 @@ import wandb
 
 # --- CONFIG ---
 CONFIG = {
-    "chunk_size": 10,
+    "chunk_size": 20,
     "batch_size": 32,
     "epochs": 25,
     "lr": 1e-4,

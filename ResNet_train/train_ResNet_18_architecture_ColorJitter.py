@@ -23,7 +23,7 @@ train_transform = transforms.Compose([
 
 # --- CONFIG ---
 CONFIG = {
-    "chunk_size": 10,
+    "chunk_size": 20,
     "batch_size": 32,
     "epochs": 20,
     "lr": 1e-4,
