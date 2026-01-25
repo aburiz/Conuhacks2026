@@ -32,7 +32,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this filename to your latest .pth
-SENTRY_MODEL_PATH = "output/classic/sentry_policy_20260125_073104.pth" 
+SENTRY_MODEL_PATH = "output/jitter/sentry_policy_20260125_055733.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -526,7 +526,7 @@ def main():
             elif drive_state is None and key == -1:
                 current_action = [0.0, 0.0]
 
-        desired_action[0] = current_action[0] * DRIVE_SCALE * 1.6
+        desired_action[0] = current_action[0] * DRIVE_SCALE * 1.4
         desired_action[1] = current_action[1] * DRIVE_SCALE * 0.90
 
     capture_running.clear()

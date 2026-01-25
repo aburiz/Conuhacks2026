@@ -33,7 +33,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this filename to your latest .pth
-SENTRY_MODEL_PATH = "output/classic/sentry_policy_20260125_055112.pth" 
+SENTRY_MODEL_PATH = "output/jitter/sentry_policy_20260125_055733.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -311,7 +311,7 @@ def sender_loop():
             target_l = current_action[0]
             target_r = current_action[1]
 
-        final_l = target_l * DRIVE_SCALE * 1.6
+        final_l = target_l * DRIVE_SCALE * 1.4
         final_r = target_r * DRIVE_SCALE * 0.9
         
         try:
