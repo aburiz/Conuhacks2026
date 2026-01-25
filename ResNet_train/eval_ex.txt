@@ -1,0 +1,20 @@
+# Load model
+model = SentryPolicy().to(device)
+model.load_state_dict(torch.load("sentry_policy.pth"))
+model.eval()
+
+# ... inside your main loop ...
+if mode == "AI_AUTO":
+    # Prepare image
+    tensor_img = torch.tensor(frame_resized).permute(2,0,1).unsqueeze(0).float().to(device) / 255.0
+    
+    with torch.no_grad():
+        action_chunk = model(tensor_img).cpu().numpy()[0] 
+        # Returns 20 numbers: [L0, R0, L1, R1, ...]
+    
+    # Execute the first 3 steps (0.3 seconds) to handle lag
+    for i in range(3):
+        left = action_chunk[2*i]
+        right = action_chunk[2*i + 1]
+        send_command(left, right)
+        time.sleep(0.1) # Wait a bit before next command
