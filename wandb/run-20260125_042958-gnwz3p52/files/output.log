@@ -1,0 +1,39 @@
+Training on cuda
+Traceback (most recent call last):
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_temporal.py", line 148, in <module>
+    for imgs, acts in loader:
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/utils/data/dataloader.py", line 801, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/utils/data/_utils/fetch.py", line 54, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/utils/data/_utils/fetch.py", line 54, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+            ~~~~~~~~~~~~^^^^^
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_temporal.py", line 68, in __getitem__
+    tensor = self.transform(tensor)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torchvision/transforms/transforms.py", line 95, in __call__
+    img = t(img)
+          ^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1776, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1787, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torchvision/transforms/transforms.py", line 1282, in forward
+    img = F.adjust_brightness(img, brightness_factor)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torchvision/transforms/functional.py", line 887, in adjust_brightness
+    return F_t.adjust_brightness(img, brightness_factor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torchvision/transforms/_functional_tensor.py", line 177, in adjust_brightness
+    _assert_channels(img, [1, 3])
+  File "/home/odin/miniconda3/envs/conU/lib/python3.11/site-packages/torchvision/transforms/_functional_tensor.py", line 63, in _assert_channels
+    raise TypeError(f"Input image tensor permitted channel values are {permitted}, but found {c}")
+TypeError: Input image tensor permitted channel values are [1, 3], but found 6
