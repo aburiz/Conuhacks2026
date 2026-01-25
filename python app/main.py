@@ -26,6 +26,7 @@ USE_UDP = True
 UDP_PORT = 3333
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
+DRIVE_SCALE = 0.2  # scale outgoing drive commands without reflashing ESP
 
 # Feature toggles / placeholders
 ENABLE_HAND_TRACKING = True   # MediaPipe hand tracking for gesture drive
@@ -156,7 +157,7 @@ class HandTracker:
 
         # Map wrist position to drive
         forward = (0.5 - wrist.y) * 2.0  # hand higher = forward
-        turn = (wrist.x - 0.5) * 2.0     # hand left/right
+        turn = (0.5 - wrist.x) * 2.0     # invert so hand moves the same way the robot turns
         forward = max(-1.0, min(1.0, forward))
         turn = max(-1.0, min(1.0, turn))
         left = forward - turn
@@ -252,7 +253,7 @@ def save_frame(frame, action):
     # Save Data
     if csv_writer:
         csv_writer.writerow([filename, action[0], action[1], timestamp_ms])
-        framsqe_count += 1
+        frame_count += 1
 
 def draw_hud(frame):
     """Draws the overlay UI on the frame."""
@@ -474,7 +475,8 @@ def main():
                 current_action = [0.0, 0.0]
 
         # update desired action for sender thread
-        desired_action[0], desired_action[1] = current_action[0], current_action[1]
+        desired_action[0] = current_action[0] * DRIVE_SCALE
+        desired_action[1] = current_action[1] * DRIVE_SCALE
 
     capture_running.clear()
     sender_running.clear()
