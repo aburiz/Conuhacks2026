@@ -57,6 +57,10 @@ static const char *STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u
 
 static httpd_handle_t camera_httpd = NULL;
 static httpd_handle_t stream_httpd = NULL;
+static uint8_t *last_jpg_buf = NULL;
+static size_t last_jpg_size = 0;
+static size_t last_jpg_cap = 0;
+static bool last_jpg_valid = false;
 
 // =================
 // Utility functions
@@ -257,20 +261,50 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   while (true) {
     fb = esp_camera_fb_get();
     if (!fb) {
-      res = ESP_FAIL;
-      break;
+      // If capture fails, try replaying the last good frame
+      if (last_jpg_valid && last_jpg_buf && last_jpg_size > 0) {
+        jpg_buf = last_jpg_buf;
+        jpg_buf_len = last_jpg_size;
+        _timestamp.tv_sec = 0;
+        _timestamp.tv_usec = 0;
+      } else {
+        res = ESP_FAIL;
+        break;
+      }
     }
 
-    if (fb->format != PIXFORMAT_JPEG) {
-      bool jpeg_converted = frame2jpg(fb, 80, &jpg_buf, &jpg_buf_len);
-      esp_camera_fb_return(fb);
-      fb = NULL;
-      if (!jpeg_converted) {
-        res = ESP_FAIL;
+    if (fb) {
+      if (fb->format != PIXFORMAT_JPEG) {
+        bool jpeg_converted = frame2jpg(fb, 80, &jpg_buf, &jpg_buf_len);
+        _timestamp.tv_sec = fb->timestamp.tv_sec;
+        _timestamp.tv_usec = fb->timestamp.tv_usec;
+        esp_camera_fb_return(fb);
+        fb = NULL;
+        if (!jpeg_converted) {
+          res = ESP_FAIL;
+        }
+      } else {
+        jpg_buf_len = fb->len;
+        jpg_buf = fb->buf;
+        _timestamp.tv_sec = fb->timestamp.tv_sec;
+        _timestamp.tv_usec = fb->timestamp.tv_usec;
       }
-    } else {
-      jpg_buf_len = fb->len;
-      jpg_buf = fb->buf;
+    }
+
+    if (res == ESP_OK && jpg_buf && jpg_buf_len > 0) {
+      // copy to last buffer for fallback replay
+      if (jpg_buf_len > last_jpg_cap) {
+        uint8_t *newbuf = (uint8_t *)realloc(last_jpg_buf, jpg_buf_len);
+        if (newbuf) {
+          last_jpg_buf = newbuf;
+          last_jpg_cap = jpg_buf_len;
+        }
+      }
+      if (last_jpg_buf && jpg_buf_len <= last_jpg_cap) {
+        memcpy(last_jpg_buf, jpg_buf, jpg_buf_len);
+        last_jpg_size = jpg_buf_len;
+        last_jpg_valid = true;
+      }
     }
 
     if (res == ESP_OK) res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, strlen(STREAM_BOUNDARY));
@@ -287,7 +321,10 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       fb = NULL;
       jpg_buf = NULL;
     } else if (jpg_buf) {
-      free(jpg_buf);
+      // if jpg_buf points to last_jpg_buf we don't free; only free conversions
+      if (jpg_buf != last_jpg_buf && fb == NULL) {
+        free(jpg_buf);
+      }
       jpg_buf = NULL;
     }
 
@@ -324,6 +361,15 @@ void startCameraServer() {
   if (httpd_start(&stream_httpd, &stream_config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
   }
+
+  // free any cached frame when server stops (defensive)
+  if (last_jpg_buf) {
+    free(last_jpg_buf);
+    last_jpg_buf = NULL;
+    last_jpg_cap = 0;
+    last_jpg_size = 0;
+    last_jpg_valid = false;
+  }
 }
 
 // ============
@@ -353,18 +399,20 @@ void setup() {
   config.pin_sccb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
+  config.xclk_freq_hz = 16000000;
   config.frame_size = FRAMESIZE_240X240;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.grab_mode = CAMERA_GRAB_LATEST;
+  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY; // smoother pacing; avoid tight polling
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 14; // lower number = better quality
-  config.fb_count = 2;      // double buffer for smoother stream
+  config.jpeg_quality = 15; // higher number = more compression, less Wi-Fi load
+  config.fb_count = 2;      // base buffer count
 
-  if (!psramFound()) {
+  if (psramFound()) {
+    config.fb_count = 3;    // smoother stream bursts when PSRAM is available
+  } else {
     config.fb_location = CAMERA_FB_IN_DRAM;
     config.fb_count = 1;
-    config.jpeg_quality = 16;
+    config.jpeg_quality = 17; // extra compression when DRAM-only
   }
 
   esp_err_t err = esp_camera_init(&config);
@@ -375,9 +423,15 @@ void setup() {
 
   sensor_t *s = esp_camera_sensor_get();
   s->set_framesize(s, FRAMESIZE_240X240);
-  s->set_quality(s, 12); // tune between 10-20 for bandwidth vs quality
-  s->set_brightness(s, 1);
-  s->set_saturation(s, 0);
+  s->set_quality(s, 15); // match compression target above
+  s->set_brightness(s, 0);
+  s->set_contrast(s, 1);
+  s->set_saturation(s, 1);
+  s->set_sharpness(s, 1);
+  s->set_lenc(s, 1);
+  s->set_dcw(s, 1);
+  // lock exposure/gain to reduce jitter; tweak if scene is too dark/bright
+
 
   // Servo PWM setup (LEDC, low-speed, timer 1)
   ledc_timer_config_t servo_timer = {
