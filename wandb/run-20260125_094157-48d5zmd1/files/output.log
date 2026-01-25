@@ -1,0 +1,46 @@
+--- Training Advanced Memory Model on cuda ---
+Loading 71 episodes for Temporal Training...
+Train Samples: 23224 | Val Samples: 2581
+Epoch 1: Train 0.1515 | Val 0.1314 | LR: 0.000100
+  >>> Saved new best model
+Epoch 2: Train 0.1230 | Val 0.1145 | LR: 0.000100
+  >>> Saved new best model
+Epoch 3: Train 0.1043 | Val 0.0971 | LR: 0.000100
+  >>> Saved new best model
+Epoch 4: Train 0.0901 | Val 0.0857 | LR: 0.000100
+  >>> Saved new best model
+Epoch 5: Train 0.0803 | Val 0.0782 | LR: 0.000100
+  >>> Saved new best model
+Epoch 6: Train 0.0732 | Val 0.0707 | LR: 0.000100
+  >>> Saved new best model
+Epoch 7: Train 0.0685 | Val 0.0674 | LR: 0.000100
+  >>> Saved new best model
+Epoch 8: Train 0.0645 | Val 0.0633 | LR: 0.000100
+  >>> Saved new best model
+Epoch 9: Train 0.0611 | Val 0.0611 | LR: 0.000100
+  >>> Saved new best model
+Epoch 10: Train 0.0589 | Val 0.0580 | LR: 0.000100
+  >>> Saved new best model
+Epoch 11: Train 0.0567 | Val 0.0565 | LR: 0.000100
+  >>> Saved new best model
+Epoch 12: Train 0.0548 | Val 0.0546 | LR: 0.000100
+  >>> Saved new best model
+Epoch 13: Train 0.0532 | Val 0.0541 | LR: 0.000100
+  >>> Saved new best model
+Epoch 14: Train 0.0523 | Val 0.0531 | LR: 0.000100
+  >>> Saved new best model
+Epoch 15: Train 0.0509 | Val 0.0517 | LR: 0.000100
+  >>> Saved new best model
+Epoch 16: Train 0.0501 | Val 0.0503 | LR: 0.000100
+  >>> Saved new best model
+Epoch 17: Train 0.0487 | Val 0.0494 | LR: 0.000100
+  >>> Saved new best model
+Epoch 18: Train 0.0479 | Val 0.0486 | LR: 0.000100
+  >>> Saved new best model
+Epoch 19: Train 0.0472 | Val 0.0483 | LR: 0.000100
+  >>> Saved new best model
+Traceback (most recent call last):
+  File "/home/odin/conUhack_2026/Conuhacks2026/ResNet_train/train_advanced_memory.py", line 172, in <module>
+    train_loss += loss.item()
+                  ^^^^^^^^^^^
+KeyboardInterrupt
