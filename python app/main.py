@@ -6,6 +6,7 @@ import requests
 import time
 import os
 import csv
+import socket
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Tuple
@@ -15,6 +16,8 @@ ESP32_IP = "192.168.0.129"  # Update if your IP changes
 STREAM_URL = f"http://{ESP32_IP}:81/stream"
 BASE_URL = f"http://{ESP32_IP}"
 SAVE_DIR = "dataset"
+USE_UDP = True
+UDP_PORT = 3333
 
 # Feature toggles / placeholders
 ENABLE_HAND_TRACKING = False  # hook MediaPipe here later
@@ -46,6 +49,9 @@ CMD_KEEPALIVE = 0.10   # seconds between resends of same command when held
 latest_frame = None
 frame_lock = threading.Lock()
 capture_running = threading.Event()
+sender_running = threading.Event()
+desired_action = [0.0, 0.0]
+udp_sock = None
 
 # Optional async key polling (Windows)
 try:
@@ -91,11 +97,10 @@ class SoundNotifier:
         pass
 
 def send_command(left, right):
-    """Sends command to ESP32 non-blocking."""
+    """HTTP fallback for drive commands."""
     try:
-        # Using a session with a short timeout to prevent lag
         url = f"{BASE_URL}/drive?l={left:.2f}&r={right:.2f}"
-        control_session.get(url, timeout=0.1)
+        control_session.get(url, timeout=0.08)
     except requests.exceptions.RequestException:
         pass  # Ignore drops to keep video smooth
 
@@ -143,7 +148,7 @@ def save_frame(frame, action):
     # Save Data
     if csv_writer:
         csv_writer.writerow([filename, action[0], action[1], timestamp_ms])
-        frame_count += 1
+        framsqe_count += 1
 
 def draw_hud(frame):
     """Draws the overlay UI on the frame."""
@@ -238,6 +243,12 @@ def main():
     hand_tracker = HandTracker(ENABLE_HAND_TRACKING)
     sentry = SentryBrain()
 
+    # UDP setup
+    global udp_sock
+    if USE_UDP:
+        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_sock.setblocking(False)
+
     os.makedirs(SAVE_DIR, exist_ok=True)
 
     print(f"Connecting to stream at: {STREAM_URL}")
@@ -247,6 +258,7 @@ def main():
         print("Error connecting to camera")
         return
     capture_running.set()
+    sender_running.set()
 
     def capture_loop():
         global latest_frame
@@ -259,6 +271,31 @@ def main():
                 time.sleep(0.005)
 
     threading.Thread(target=capture_loop, daemon=True).start()
+    def sender_loop():
+        global last_sent_action_time
+        while sender_running.is_set():
+            now = time.time()
+            # Snapshot desired action
+            da = list(desired_action)
+            if da != last_sent_action or now - last_sent_action_time > CMD_KEEPALIVE:
+                try:
+                    if USE_UDP and udp_sock:
+                        payload = f"{da[0]:.2f},{da[1]:.2f}".encode()
+                        udp_sock.sendto(payload, (ESP32_IP, UDP_PORT))
+                    else:
+                        send_command(da[0], da[1])
+                except Exception:
+                    # retry once after brief pause via HTTP fallback
+                    time.sleep(0.03)
+                    try:
+                        send_command(da[0], da[1])
+                    except Exception:
+                        pass
+                last_sent_action[:] = da
+                last_sent_action_time = now
+            time.sleep(0.01)
+
+    threading.Thread(target=sender_loop, daemon=True).start()
 
     print("\n--- CONTROLS ---")
     print("TAB / 1/2/3 : Switch modes (Teleop / Tracking / Sentry)")
@@ -337,14 +374,11 @@ def main():
             elif drive_state is None and key == -1:
                 current_action = [0.0, 0.0]
 
-        # --- command send with keepalive ---
-        now = time.time()
-        if current_action != last_sent_action or now - last_sent_action_time > CMD_KEEPALIVE:
-            threading.Thread(target=send_command, args=(current_action[0], current_action[1]), daemon=True).start()
-            last_sent_action = list(current_action)
-            last_sent_action_time = now
+        # update desired action for sender thread
+        desired_action[0], desired_action[1] = current_action[0], current_action[1]
 
     capture_running.clear()
+    sender_running.clear()
     cap.release()
     cv2.destroyAllWindows()
     if csv_file:

@@ -5,6 +5,7 @@
 #include "img_converters.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <WiFiUdp.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -68,6 +69,8 @@ static bool last_jpg_valid = false;
 static volatile float target_left = 0.0f;
 static volatile float target_right = 0.0f;
 portMUX_TYPE driveMux = portMUX_INITIALIZER_UNLOCKED;
+WiFiUDP udp;
+const uint16_t UDP_PORT = 3333;
 
 // =================
 // Utility functions
@@ -484,6 +487,9 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
+  udp.begin(UDP_PORT);
+  Serial.printf("UDP listening on %d\n", UDP_PORT);
+
   startCameraServer();
   Serial.println("HTTP server started");
   Serial.println("Open http://<IP> for controls, stream on http://<IP>:81/stream");
@@ -504,6 +510,27 @@ void controlTask(void *pvParameters) {
   const TickType_t period = pdMS_TO_TICKS(20);  // 50 Hz servo update
   TickType_t last = xTaskGetTickCount();
   for (;;) {
+    // UDP non-blocking poll
+    int packetSize = udp.parsePacket();
+    if (packetSize > 0) {
+      char buf[64];
+      int len = udp.read(buf, sizeof(buf) - 1);
+      if (len > 0) {
+        buf[len] = 0;
+        for (int i = 0; i < len; i++) {
+          if (buf[i] == ',') buf[i] = ' ';
+        }
+        float l, r;
+        if (sscanf(buf, "%f %f", &l, &r) == 2) {
+          l = constrain(l, -1.0f, 1.0f);
+          r = constrain(r, -1.0f, 1.0f);
+          portENTER_CRITICAL(&driveMux);
+          target_left = l;
+          target_right = r;
+          portEXIT_CRITICAL(&driveMux);
+        }
+      }
+    }
     float l, r;
     portENTER_CRITICAL(&driveMux);
     l = target_left;
