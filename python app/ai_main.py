@@ -425,6 +425,9 @@ def main():
     threading.Thread(target=sender_loop, daemon=True).start()
 
     print("\n--- CONTROLS ---")
+    cv2.namedWindow('ESP32 RC Controller', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('ESP32 RC Controller', 1920, 1080)
+
     print("TAB / 1/2/3 : Switch modes (Teleop / Tracking / Sentry)")
     print("SPACE       : Toggle recording")
     print("Arrows/WASD : Drive (Teleop)")
@@ -463,7 +466,13 @@ def main():
             cv2.putText(frame, f"Target: L{current_action[0]:.2f} R{current_action[1]:.2f}", (60, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         draw_hud(frame)
-        cv2.imshow('ESP32 RC Controller', frame)
+        # scale up for display (keep aspect, target height 1080)
+        target_h = 1080
+        fh, fw, _ = frame.shape
+        scale = target_h / float(fh)
+        target_w = int(fw * scale)
+        display = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+        cv2.imshow('ESP32 RC Controller', display)
 
         drive_state = poll_drive_state()
         key = cv2.waitKeyEx(1)
