@@ -10,6 +10,12 @@ import socket
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Tuple
+import math
+from pathlib import Path
+
+import mediapipe as mp
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision as mp_vision
 
 # --- CONFIGURATION ---
 ESP32_IP = "192.168.0.129"  # Update if your IP changes
@@ -18,9 +24,11 @@ BASE_URL = f"http://{ESP32_IP}"
 SAVE_DIR = "dataset"
 USE_UDP = True
 UDP_PORT = 3333
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
 # Feature toggles / placeholders
-ENABLE_HAND_TRACKING = False  # hook MediaPipe here later
+ENABLE_HAND_TRACKING = True   # MediaPipe hand tracking for gesture drive
 ENABLE_SOUND = False          # hook sound feedback here later
 
 # --- STATES ---
@@ -53,6 +61,15 @@ sender_running = threading.Event()
 desired_action = [0.0, 0.0]
 udp_sock = None
 
+# ---------------------------------------------------------------------------
+# MediaPipe model utilities
+# ---------------------------------------------------------------------------
+def ensure_model():
+    if MODEL_PATH.exists():
+        return
+    print("Downloading hand_landmarker.task ...")
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+
 # Optional async key polling (Windows)
 try:
     import ctypes
@@ -64,16 +81,103 @@ except Exception:
     _HAS_ASYNC = False
 # Placeholders ---------------------------------------------------------------
 class HandTracker:
-    """Placeholder for MediaPipe hand tracking."""
+    """
+    MediaPipe Hands-based gesture controller.
+    - Open hand/palm: drive based on palm position.
+    - Fist (closed): stop.
+    """
     def __init__(self, enabled: bool):
         self.enabled = enabled
+        self.present = False
+        self.missing_frames = 0
+        self.max_missing = 5
+        try:
+            ensure_model()
+            opts = mp_vision.HandLandmarkerOptions(
+                base_options=mp_python.BaseOptions(model_asset_path=str(MODEL_PATH)),
+                running_mode=mp_vision.RunningMode.VIDEO,
+                num_hands=1,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+            self.landmarker = mp_vision.HandLandmarker.create_from_options(opts)
+            self.enabled = enabled
+        except Exception as e:
+            print(f"[HandTracker] MediaPipe not available ({e}); hand control disabled.")
+            self.enabled = False
+            self.landmarker = None
+
+        # thresholds relative to hand size
+        self.open_thresh = 0.18
+        self.fist_thresh = 0.12
+        self.smooth = 0.3  # low-pass factor
+        self.prev = (0.0, 0.0)
+        self.t0 = time.perf_counter()
+        self.deadband = 0.05
+        self.quant_step = 0.05
 
     def infer(self, frame) -> Optional[Tuple[float, float]]:
-        """Return (left,right) in [-1,1] or None if no hand intent."""
-        if not self.enabled:
+        if not self.enabled or self.landmarker is None:
             return None
-        # TODO: implement MediaPipe Hands -> drive mapping
-        return None
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        ts_ms = int((time.perf_counter() - self.t0) * 1000)
+        res = self.landmarker.detect_for_video(mp_image, ts_ms)
+        if not res.hand_landmarks:
+            self.missing_frames += 1
+            if self.missing_frames > self.max_missing:
+                self.prev = (0.0, 0.0)
+            return None
+
+        self.missing_frames = 0
+        hand = res.hand_landmarks[0]
+
+        # Wrist and fingertips
+        wrist = hand[0]
+        tips = [hand[i] for i in (8, 12, 16, 20)]
+        # bounding box diagonal for scale
+        xs = [lm.x for lm in hand]
+        ys = [lm.y for lm in hand]
+        diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys)) + 1e-6
+
+        mean_tip_dist = sum(math.hypot(t.x - wrist.x, t.y - wrist.y) for t in tips) / len(tips)
+        is_fist = mean_tip_dist < self.fist_thresh
+        is_open = mean_tip_dist > self.open_thresh
+
+        if is_fist:
+            self.prev = (0.0, 0.0)
+            return (0.0, 0.0)
+
+        if not is_open:
+            # ambiguous hand pose; ignore
+            return None
+
+        # Map wrist position to drive
+        forward = (0.5 - wrist.y) * 2.0  # hand higher = forward
+        turn = (wrist.x - 0.5) * 2.0     # hand left/right
+        forward = max(-1.0, min(1.0, forward))
+        turn = max(-1.0, min(1.0, turn))
+        left = forward - turn
+        right = forward + turn
+        left = max(-1.0, min(1.0, left))
+        right = max(-1.0, min(1.0, right))
+
+        # Low-pass filter
+        l = self.smooth * left + (1 - self.smooth) * self.prev[0]
+        r = self.smooth * right + (1 - self.smooth) * self.prev[1]
+
+        # Deadband and quantization to reduce command spam
+        def q(v):
+            if abs(v) < self.deadband:
+                return 0.0
+            return round(v / self.quant_step) * self.quant_step
+
+        l = q(l)
+        r = q(r)
+        self.prev = (l, r)
+        return (l, r)
 
 
 class SentryBrain:
@@ -313,20 +417,15 @@ def main():
                 save_img = cv2.resize(frame, (224, 224))
                 save_frame(save_img, current_action)
 
+            # TELEOP ignores gesture; only keyboard/gamepad drive
+
+        elif current_mode == AppMode.TRACKING:
             gesture_action = hand_tracker.infer(frame)
             if gesture_action is not None:
                 current_action = list(gesture_action)
-
-            if current_action != last_sent_action:
-                threading.Thread(target=send_command, args=(current_action[0], current_action[1])).start()
-                last_sent_action = list(current_action)
-
-        elif current_mode == AppMode.TRACKING:
-            if current_action != [0.0, 0.0]:
+            else:
                 current_action = [0.0, 0.0]
-                send_command(0, 0)
-                last_sent_action = [0.0, 0.0]
-            cv2.putText(frame, "TRACKING PLACEHOLDER (hand tracking soon)", (40, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(frame, "TRACKING (gesture control)", (40, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         elif current_mode == AppMode.SENTRY:
             auto_action = sentry.decide(frame)
