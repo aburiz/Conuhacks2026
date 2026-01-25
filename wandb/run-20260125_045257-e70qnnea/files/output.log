@@ -1,0 +1,24 @@
+Training on cuda
+Found 18 episodes. Loading data...
+Dataset Loaded: 12635 samples ready for training.
+Epoch 1: Loss 0.1776
+Epoch 2: Loss 0.1364
+Epoch 3: Loss 0.1123
+Epoch 4: Loss 0.0973
+Epoch 5: Loss 0.0871
+Epoch 6: Loss 0.0799
+Epoch 7: Loss 0.0759
+Epoch 8: Loss 0.0720
+Epoch 9: Loss 0.0697
+Epoch 10: Loss 0.0671
+Epoch 11: Loss 0.0656
+Epoch 12: Loss 0.0642
+Epoch 13: Loss 0.0628
+Epoch 14: Loss 0.0619
+Epoch 15: Loss 0.0609
+Epoch 16: Loss 0.0604
+Epoch 17: Loss 0.0595
+Epoch 18: Loss 0.0587
+Epoch 19: Loss 0.0580
+Epoch 20: Loss 0.0574
+Model Saved to: output/classic/sentry_policy_20260125_045827.pth

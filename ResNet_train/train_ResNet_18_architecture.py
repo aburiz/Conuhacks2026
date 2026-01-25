@@ -19,7 +19,7 @@ from torchvision import transforms
 
 # --- CONFIG ---
 CONFIG = {
-    "chunk_size": 10,
+    "chunk_size": 20,
     "batch_size": 32,
     "epochs": 20,
     "lr": 1e-4,
@@ -113,7 +113,7 @@ class SentryPolicy(nn.Module):
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, CONFIG["chunk_size"] * 2), 
-            # nn.Tanh() # <--- Forces output to be valid motor speeds (-1 to 1) 
+            nn.Tanh() # <--- Forces output to be valid motor speeds (-1 to 1) 
             #there is a speed control now 
         )
 
@@ -141,7 +141,16 @@ if __name__ == "__main__":
         wandb.finish() # Clean exit
         exit()
         
-    loader = DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=True)
+    #loader = DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=True)
+    # New (Optimized)
+    loader = DataLoader(
+        dataset, 
+        batch_size=128,          # Try 128 or 256. 32 is too small.
+        shuffle=True, 
+        num_workers=16,           # Critical: Uses 8 CPU cores to prep images ahead of time
+        pin_memory=True,         # Faster CPU -> GPU transfer
+        persistent_workers=True  # Keeps workers alive between epochs
+    )
     
     model = SentryPolicy().to(device)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG["lr"])

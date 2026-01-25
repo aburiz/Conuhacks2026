@@ -32,7 +32,7 @@ UDP_PORT = 3333
 
 # Models
 # Update this to your TEMPORAL model file (e.g. sentry_policy_2026...pth)
-SENTRY_MODEL_PATH = "output/sentry_policy_20260125_XXXXXX.pth" 
+SENTRY_MODEL_PATH = "output/temporal/sentry_policy_20260125_064812.pth" 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 
@@ -97,7 +97,7 @@ class SentryPolicy(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        self.chunk_size = 10 
+        self.chunk_size = 20 
         
         # 1. Load Standard ResNet
         self.backbone = resnet18(weights=None) 
@@ -507,8 +507,8 @@ def main():
             elif drive_state is None and key == -1:
                 current_action = [0.0, 0.0]
 
-        desired_action[0] = current_action[0] * DRIVE_SCALE
-        desired_action[1] = current_action[1] * DRIVE_SCALE
+        desired_action[0] = current_action[0] * DRIVE_SCALE * 1.4
+        desired_action[1] = current_action[1] * DRIVE_SCALE * 0.9
 
     capture_running.clear()
     sender_running.clear()
